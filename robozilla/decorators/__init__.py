@@ -177,6 +177,7 @@ def _skip_downstream_condition(bug, sat_version_picker=None):
     :param sat_version_picker: callable
     :return: bool
     """
+    LOGGER.warn('checking downstream condition.')
     flags = bug.get('flags', {})
     positive_flags = [k for k, v in flags.items() if v == '+']
     zstream_versions = list(filter(
@@ -187,18 +188,26 @@ def _skip_downstream_condition(bug, sat_version_picker=None):
         lambda version: version is not None,
         map(_to_downstream_version, positive_flags)
     ))
+    LOGGER.warn('z: {0}, down: {1}'.format(zstream_versions, downstream_versions))
 
     if len(downstream_versions) == 0 and len(zstream_versions) == 0:
         return True
-    target_milestone_version = bug['target_milestone']
+    target_milestone_version = bug.get('target_milestone', None)
 
     has_down_and_zstream = downstream_versions and zstream_versions
-    if has_down_and_zstream and target_milestone_version is 'Unspecified':
+    LOGGER.warn('has_both?: {0}, target_milestone: {1}'.format(has_down_and_zstream, target_milestone_version))
+    if (has_down_and_zstream and
+        target_milestone_version in ['Unspecified', 'GA', 'Beta']):
+        flag_version = max(downstream_versions)
         LOGGER.warning('Bugzilla with both downstream and zstream flags and '
-                       'unspecified target_milestone: {}'.format(bug))
-        return True
-
-    flag_version = _to_target_milestone_version(target_milestone_version)
+                       'non-numeric target_milestone: {0}. Defaulting to higher '
+                       'version: {1}.'.format(bug, flag_version))
+    else:
+        # sometimes a target milestone isn't set.
+        # In that case, set flag version to None and let it be handled later.
+        flag_version = None
+        if target_milestone_version:
+            flag_version = _to_target_milestone_version(target_milestone_version)
 
     if flag_version is None or not has_down_and_zstream:
         if downstream_versions:
@@ -211,6 +220,7 @@ def _skip_downstream_condition(bug, sat_version_picker=None):
     except (ValueError, TypeError):
         return False
     else:
+        LOGGER.warn('flag: {0}, sat: {1}'.format(flag_version, sat_version))
         return sat_version < flag_version
 
 
@@ -248,7 +258,10 @@ def _check_skip_condition_for_one_bug(bug, consider_flags,
         whiteboard = bug.get('whiteboard', '')
         yield whiteboard
         yield 'verified in upstream' in whiteboard.lower()
-
+    LOGGER.warn('skip_up: {0}, consider_flags: {1}, skip_down {2}'.format(
+        all(skip_upstream_conditions()), consider_flags,
+            _skip_downstream_condition(bug, sat_version_picker)
+    ))
     return (all(skip_upstream_conditions()) or
             (consider_flags and _skip_downstream_condition(
                 bug, sat_version_picker)))
@@ -329,7 +342,10 @@ def _check_skip_conditions_for_bug_and_clones(bug, consider_flags=True,
 
         skip_results = (
             _check_skip_condition_for_one_bug(
-                bug_or_clone, consider_flags, sat_version_picker, config
+                bug_or_clone,
+                bug_or_clone.get('target_milestone', False),
+                sat_version_picker,
+                config
             )
             for bug_or_clone in filtered_bugs
         )

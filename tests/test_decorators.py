@@ -62,6 +62,30 @@ def test_closed_errata_runs():
     assert 2 == 2
 
 
+@skip_if_bug_open('bugzilla', 1234567, sat_version_picker=lambda: '6.4')
+def test_positive_run_higher_double_flag():
+    print('this should run')
+    assert 2 == 2
+
+
+@skip_if_bug_open('bugzilla', 1234567, sat_version_picker=lambda: '6.3')
+def test_negative_run_higher_double_flag():
+    print('this should never run')
+    assert 2 == 1
+
+
+@skip_if_bug_open('bugzilla', 7654321, sat_version_picker=lambda: '6.3')
+def test_positive_run_lower_double_flag():
+    print('this should run')
+    assert 2 == 2
+
+
+@skip_if_bug_open('bugzilla', 7654321, sat_version_picker=lambda: '6.4')
+def test_positive_run_lower_target_milestone():
+    print('this should run')
+    assert 2 == 2
+
+
 def test_all_open():
     open_bugs = [
         int(key) for key, val in cache_data.items()
